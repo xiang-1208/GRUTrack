@@ -1,0 +1,87 @@
+"""
+get token for every seq on the NuScenes dataset
+"""
+
+import os, json, sys
+sys.path.append('../..')
+from utils.io import load_file
+from tqdm import tqdm
+from nuscenes.nuscenes import NuScenes
+
+FIRST_TOKEN_ROOT_PATH = '../utils/token_table/'
+
+# def load_file(file_path):
+#     """
+#     :param file_path: .json, path of file
+#     :return: dict/list, file
+#     """
+#     # load file
+#     file_path = os.path.join(file_path)
+#     print(f"Parsing {file_path}")
+#     with open(file_path, 'r') as f:
+#         file_json = json.load(f)
+#     return file_json
+
+def extract_token(dataset_path, detector_path, dataset_name='NuScenes', dataset_version='trainval'):
+    """
+    :param dataset_path: path of dataset
+    :param dataset_name: name of dataset
+    :param detector_path: path of detection file
+    :param dataset_version: version(split) of dataset (trainval/test)
+    :return: first frame token table .json
+    """
+
+    assert dataset_version in ['train','trainval', 'test'] and dataset_name in ['NuScenes', 'Waymo'], \
+        "unsupported dataset or data version"    
+    
+    if dataset_name == 'NuScenes':
+        nusc = NuScenes(version='v1.0-' + 'test', dataroot=dataset_path,
+                        verbose=True) 
+
+        frame_num = 6019 if dataset_version == 'trainval' else 28130
+        seq_num = 150 if dataset_version == 'trainval' else 700 
+        frame_num = 6008
+        seq_num = 150
+
+        # load detector file   
+        detector_json = load_file(detector_path)
+        assert len(detector_json['results']) == frame_num, "wrong detection result"
+
+        # get first frame token of each seq
+        token_table = []  
+
+        print("Extracting frame token...")
+        first_token_table = None
+        for sample_token in tqdm(detector_json['results']):
+            if nusc.get('sample', sample_token)['prev'] == '':
+                token_table.append([])
+                # first_token_table = sample_token
+                token_table[-1].append(sample_token)
+            else:
+                assert token_table[-1] is not None
+                token_table[-1].append(sample_token)
+        # assert len(first_token_table) == seq_num, "wrong detection result"  
+
+        # write token table
+        os.makedirs(FIRST_TOKEN_ROOT_PATH + dataset_version, exist_ok=True)
+        FIRST_TOKEN_PATH = FIRST_TOKEN_ROOT_PATH + dataset_version + "/nusc_" + dataset_version +"_token.json"
+        print(f"write token table to {FIRST_TOKEN_PATH}")
+        json.dump(token_table, open(FIRST_TOKEN_PATH, "w"))            
+
+    else:
+        raise Exception("Waymo dataset is not currently supported")
+
+# if __name__ == "__main__":
+#     extract_token(
+#         dataset_path='/data/wxx/nuscenes/v1.0-trainval/',
+#         detector_path='/home/wxx/Poly-MOT/infos_val_10sweeps_withvelo_filter_True.json',
+#         dataset_name='NuScenes',
+#         dataset_version='trainval'
+#     )
+if __name__ == "__main__":
+    extract_token(
+        dataset_path='/data/wxx/nuscenes/v1.0-test/',
+        detector_path='/home/wxx/Poly-MOT/VoxelNeXt-Detection-FlipTest.json',
+        dataset_name='NuScenes',
+        dataset_version='test'
+    )
